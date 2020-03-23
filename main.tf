@@ -1,11 +1,19 @@
-variable "mysql_version" {
+variable "mysql_major_version" {
   type = string
   default = "5.7"
+}
+variable "mysql_minor_version" {
+  type = string
+  default = "5.7.25"
+}
+variable "mysql_port" {
+  type = number
+  default = 3306
 }
 
 resource "aws_db_parameter_group" "example" {
   name = "example"
-  family = "mysql${var.mysql_version}"
+  family = "mysql${var.mysql_major_version}"
 
   parameter {
     name = "character_set_database"
@@ -21,7 +29,7 @@ resource "aws_db_parameter_group" "example" {
 resource "aws_db_option_group" "example" {
   name = "example"
   engine_name = "mysql"
-  major_engine_version = var.mysql_version
+  major_engine_version = var.mysql_major_version
 
   option {
     option_name = "MARIADB_AUDIT_PLUGIN"
@@ -33,6 +41,45 @@ resource "aws_db_subnet_group" "example" {
   subnet_ids = [aws_subnet.private_0.id, aws_subnet.private_1.id]
 }
 
+resource "aws_db_instance" "example" {
+  identifier = "example"
+  engine = "mysql"
+  engine_version = var.mysql_minor_version
+  instance_class = "db.t3.small"
+  allocated_storage = 20
+  max_allocated_storage = 100
+  storage_type = "gp2"
+  storage_encrypted = true
+  kms_key_id = aws_kms_key.example.arn
+  username = "admin"
+  password = "uninitialized"
+  multi_az = true
+  publicly_accessible = false
+  backup_window = "09:10-09:40"
+  backup_retention_period = 30
+  maintenance_window = "mon:10:10-mon:10:40"
+  auto_minor_version_upgrade = false
+  deletion_protection = true
+  skip_final_snapshot = false
+  port = var.mysql_port
+  apply_immediately = false
+  vpc_security_group_ids = [module.mysql_sg.security_group_id]
+  parameter_group_name = aws_db_parameter_group.example.name
+  option_group_name = aws_db_option_group.example.name
+  db_subnet_group_name = aws_db_subnet_group.example.name
+
+  lifecycle {
+    ignore_changes = [password]
+  }
+}
+
+module "mysql_sg" {
+  source = "./security_group"
+  name = "mysql-sg"
+  vpc_id = aws_vpc.example.id
+  port = var.mysql_port
+  cidr_blocks = [aws_vpc.example.cidr_block]
+}
 
 # ----------------------------------------
 # N/W
@@ -184,3 +231,18 @@ resource "aws_route" "private_1" {
   destination_cidr_block = "0.0.0.0/0"
 }
 
+# ----------------------------------------
+# kms
+# ----------------------------------------
+
+resource "aws_kms_key" "example" {
+  description = "Example Customer Master Key"
+  enable_key_rotation = true
+  is_enabled = false
+  deletion_window_in_days = 30
+}
+
+resource "aws_kms_alias" "example" {
+  name = "alias/example"
+  target_key_id = aws_kms_key.example.key_id
+}
