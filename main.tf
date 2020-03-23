@@ -59,8 +59,8 @@ resource "aws_db_instance" "example" {
   backup_retention_period = 30
   maintenance_window = "mon:10:10-mon:10:40"
   auto_minor_version_upgrade = false
-  deletion_protection = true
-  skip_final_snapshot = false
+  deletion_protection = false
+  skip_final_snapshot = true
   port = var.mysql_port
   apply_immediately = false
   vpc_security_group_ids = [module.mysql_sg.security_group_id]
